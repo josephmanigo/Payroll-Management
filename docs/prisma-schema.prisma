@@ -1,0 +1,429 @@
+// ==========================================
+// PAYROLL MANAGEMENT - PRISMA DATABASE SCHEMA
+// Optimized for up to 100 employees
+// ==========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// USER & AUTHENTICATION
+// ==========================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          UserRole  @default(EMPLOYEE)
+  avatarUrl     String?
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  
+  // Relations
+  employee      Employee?
+  createdPayrolls PayrollRun[] @relation("CreatedBy")
+  approvedPayrolls PayrollRun[] @relation("ApprovedBy")
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([email])
+  @@index([role])
+}
+
+enum UserRole {
+  ADMIN
+  HR
+  EMPLOYEE
+}
+
+// ==========================================
+// EMPLOYEE
+// ==========================================
+
+model Employee {
+  id                String          @id @default(cuid())
+  employeeNumber    String          @unique
+  firstName         String
+  lastName          String
+  email             String          @unique
+  phone             String?
+  dateOfBirth       DateTime?
+  hireDate          DateTime
+  terminationDate   DateTime?
+  
+  // Employment Details
+  department        String
+  position          String
+  employmentType    EmploymentType  @default(FULL_TIME)
+  status            EmployeeStatus  @default(ACTIVE)
+  
+  // Compensation
+  baseSalary        Decimal         @db.Decimal(12, 2)
+  payFrequency      PayFrequency    @default(SEMI_MONTHLY)
+  
+  // Banking
+  bankName          String?
+  bankAccountNumber String?         // Encrypted
+  bankRoutingNumber String?         // Encrypted
+  
+  // Tax Information
+  taxId             String?         // Encrypted (SSN)
+  federalFilingStatus String?
+  stateFilingStatus String?
+  federalAllowances Int             @default(0)
+  stateAllowances   Int             @default(0)
+  
+  // Address
+  addressStreet     String?
+  addressCity       String?
+  addressState      String?
+  addressZipCode    String?
+  addressCountry    String          @default("USA")
+  
+  // Emergency Contact
+  emergencyContactName     String?
+  emergencyContactRelation String?
+  emergencyContactPhone    String?
+  
+  // Relations
+  userId            String?         @unique
+  user              User?           @relation(fields: [userId], references: [id])
+  payrollItems      PayrollItem[]
+  payslips          Payslip[]
+  timeEntries       TimeEntry[]
+  employeeBenefits  EmployeeBenefit[]
+  employeeDeductions EmployeeDeduction[]
+  
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  @@index([department])
+  @@index([status])
+  @@index([employeeNumber])
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  TERMINATED
+  ON_LEAVE
+}
+
+enum PayFrequency {
+  WEEKLY
+  BI_WEEKLY
+  SEMI_MONTHLY
+  MONTHLY
+}
+
+// ==========================================
+// PAYROLL RUN
+// ==========================================
+
+model PayrollRun {
+  id              String          @id @default(cuid())
+  payPeriodStart  DateTime
+  payPeriodEnd    DateTime
+  payDate         DateTime
+  status          PayrollStatus   @default(DRAFT)
+  
+  // Totals
+  totalGross      Decimal         @db.Decimal(14, 2) @default(0)
+  totalDeductions Decimal         @db.Decimal(14, 2) @default(0)
+  totalTaxes      Decimal         @db.Decimal(14, 2) @default(0)
+  totalNet        Decimal         @db.Decimal(14, 2) @default(0)
+  employeeCount   Int             @default(0)
+  
+  // Audit
+  createdById     String
+  createdBy       User            @relation("CreatedBy", fields: [createdById], references: [id])
+  approvedById    String?
+  approvedBy      User?           @relation("ApprovedBy", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  finalizedAt     DateTime?
+  
+  // Relations
+  payrollItems    PayrollItem[]
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([status])
+  @@index([payDate])
+  @@index([payPeriodStart, payPeriodEnd])
+}
+
+enum PayrollStatus {
+  DRAFT
+  PROCESSING
+  APPROVED
+  FINALIZED
+  CANCELLED
+}
+
+// ==========================================
+// PAYROLL ITEM (Individual Employee Payroll)
+// ==========================================
+
+model PayrollItem {
+  id              String          @id @default(cuid())
+  
+  // Relations
+  payrollRunId    String
+  payrollRun      PayrollRun      @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id])
+  
+  // Earnings
+  basePay         Decimal         @db.Decimal(12, 2)
+  overtimePay     Decimal         @db.Decimal(12, 2) @default(0)
+  overtimeHours   Decimal         @db.Decimal(6, 2) @default(0)
+  bonuses         Decimal         @db.Decimal(12, 2) @default(0)
+  commissions     Decimal         @db.Decimal(12, 2) @default(0)
+  grossPay        Decimal         @db.Decimal(12, 2)
+  
+  // Taxes
+  federalTax      Decimal         @db.Decimal(12, 2) @default(0)
+  stateTax        Decimal         @db.Decimal(12, 2) @default(0)
+  localTax        Decimal         @db.Decimal(12, 2) @default(0)
+  socialSecurity  Decimal         @db.Decimal(12, 2) @default(0)
+  medicare        Decimal         @db.Decimal(12, 2) @default(0)
+  totalTaxes      Decimal         @db.Decimal(12, 2)
+  
+  // Deductions
+  totalDeductions Decimal         @db.Decimal(12, 2) @default(0)
+  
+  // Net
+  netPay          Decimal         @db.Decimal(12, 2)
+  
+  status          PayrollItemStatus @default(PENDING)
+  notes           String?
+  
+  // Relations
+  deductions      PayrollDeduction[]
+  payslip         Payslip?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@unique([payrollRunId, employeeId])
+  @@index([employeeId])
+  @@index([status])
+}
+
+enum PayrollItemStatus {
+  PENDING
+  PROCESSED
+  ERROR
+  VOID
+}
+
+// ==========================================
+// PAYROLL DEDUCTION (Per Payroll Item)
+// ==========================================
+
+model PayrollDeduction {
+  id              String          @id @default(cuid())
+  
+  payrollItemId   String
+  payrollItem     PayrollItem     @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
+  
+  deductionId     String
+  deduction       Deduction       @relation(fields: [deductionId], references: [id])
+  
+  name            String
+  type            DeductionType
+  amount          Decimal         @db.Decimal(12, 4) // Supports percentages
+  createdAt       DateTime        @default(now())
+  
+  @@index([payrollItemId])
+}
+
+// ==========================================
+// PAYSLIP
+// ==========================================
+
+model Payslip {
+  id              String          @id @default(cuid())
+  
+  payrollItemId   String          @unique
+  payrollItem     PayrollItem     @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id])
+  
+  payPeriodStart  DateTime
+  payPeriodEnd    DateTime
+  payDate         DateTime
+  
+  pdfUrl          String?
+  pdfGeneratedAt  DateTime?
+  
+  emailSent       Boolean         @default(false)
+  emailSentAt     DateTime?
+  viewedAt        DateTime?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([employeeId])
+  @@index([payDate])
+}
+
+// ==========================================
+// TIME ENTRY
+// ==========================================
+
+model TimeEntry {
+  id              String          @id @default(cuid())
+  
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id])
+  
+  date            DateTime        @db.Date
+  regularHours    Decimal         @db.Decimal(5, 2) @default(0)
+  overtimeHours   Decimal         @db.Decimal(5, 2) @default(0)
+  
+  source          TimeEntrySource @default(MANUAL)
+  notes           String?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@index([date])
+}
+
+enum TimeEntrySource {
+  MANUAL
+  CSV_IMPORT
+  INTEGRATION
+}
+
+// ==========================================
+// DEDUCTION TEMPLATE
+// ==========================================
+
+model Deduction {
+  id              String          @id @default(cuid())
+  name            String
+  description     String?
+  type            DeductionType
+  calculationType CalculationType @default(FIXED)
+  amount          Decimal         @db.Decimal(12, 4) // Supports percentages
+  isActive        Boolean         @default(true)
+  
+  // Relations
+  employeeDeductions EmployeeDeduction[]
+  payrollDeductions  PayrollDeduction[]
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([isActive])
+}
+
+enum DeductionType {
+  PRE_TAX
+  POST_TAX
+}
+
+enum CalculationType {
+  FIXED
+  PERCENTAGE
+}
+
+// ==========================================
+// BENEFIT
+// ==========================================
+
+model Benefit {
+  id                    String          @id @default(cuid())
+  name                  String
+  description           String?
+  type                  BenefitType
+  employerContribution  Decimal         @db.Decimal(12, 4)
+  employeeContribution  Decimal         @db.Decimal(12, 4)
+  calculationType       CalculationType @default(FIXED)
+  isActive              Boolean         @default(true)
+  
+  // Relations
+  employeeBenefits      EmployeeBenefit[]
+  
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  
+  @@index([isActive])
+}
+
+enum BenefitType {
+  HEALTH
+  DENTAL
+  VISION
+  LIFE
+  RETIREMENT
+  HSA
+  FSA
+  OTHER
+}
+
+// ==========================================
+// EMPLOYEE BENEFIT (Enrollment)
+// ==========================================
+
+model EmployeeBenefit {
+  id              String          @id @default(cuid())
+  
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id])
+  benefitId       String
+  benefit         Benefit         @relation(fields: [benefitId], references: [id])
+  
+  coverageLevel   String?         // e.g., "Employee Only", "Family"
+  startDate       DateTime        @default(now())
+  endDate         DateTime?
+  isActive        Boolean         @default(true)
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@unique([employeeId, benefitId])
+  @@index([employeeId])
+  @@index([isActive])
+}
+
+// ==========================================
+// AUDIT LOG
+// ==========================================
+
+model AuditLog {
+  id              String          @id @default(cuid())
+  userId          String?
+  action          String
+  entityType      String
+  entityId        String?
+  oldValues       Json?
+  newValues       Json?
+  ipAddress       String?
+  userAgent       String?
+  
+  createdAt       DateTime        @default(now())
+  
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

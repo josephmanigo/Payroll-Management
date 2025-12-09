@@ -1,0 +1,23 @@
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @media (prefers-color-scheme: light) {
+      .background { fill: #0f172a; }
+      .accent { fill: #22c55e; }
+      .line { stroke: #0f172a; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .background { fill: #0f172a; }
+      .accent { fill: #22c55e; }
+      .line { stroke: #0f172a; }
+    }
+  </style>
+  <rect class="background" width="180" height="180" rx="37" />
+  <!-- Document/List lines representing payroll -->
+  <rect class="accent" x="35" y="45" width="80" height="12" rx="3" />
+  <rect class="accent" x="35" y="70" width="60" height="12" rx="3" />
+  <rect class="accent" x="35" y="95" width="70" height="12" rx="3" />
+  <rect class="accent" x="35" y="120" width="50" height="12" rx="3" />
+  <!-- Currency/Payment circle with P for Payroll -->
+  <circle class="accent" cx="130" cy="115" r="35" />
+  <text x="130" y="128" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="48" class="line" fill="#0f172a">P</text>
+</svg>

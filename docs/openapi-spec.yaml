@@ -1,0 +1,19 @@
+openapi: 3.0.3
+info:
+  title: Payroll Management API
+  description: |
+    RESTful API for Payroll Management - Modern Payroll Management System
+    
+    ## Authentication
+    All endpoints require JWT Bearer token authentication except for `/auth/login`.
+    
+    ## Response Format
+    All responses follow a unified structure:
+    \`\`\`json
+    {
+      "success": boolean,
+      "data": any,
+      "error": string (optional),
+      "message": string (optional),
+      "pagination": { page, limit, total, totalPages } (optional)
+    }
